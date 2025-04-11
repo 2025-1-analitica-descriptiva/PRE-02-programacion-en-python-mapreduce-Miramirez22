@@ -6,6 +6,8 @@ import fileinput
 import glob
 import os.path
 import time
+import shutil
+import re
 from itertools import groupby
 
 
@@ -19,6 +21,19 @@ from itertools import groupby
 #
 def copy_raw_files_to_input_folder(n):
     """Funcion copy_files"""
+
+    if not os.path.exists("files/input"):
+        os.makedirs("files/input")
+
+    for file in glob.glob("files/raw/*"):
+        for i in range(1, n + 1):
+            with open(file, "r", encoding="utf-8") as f:
+                with open(
+                    f"files/input/{os.path.basename(file).split('.')[0]}_{i}.txt",
+                    "w",
+                    encoding="utf-8",
+                ) as f2:
+                    f2.write(f.read())
 
 
 #
@@ -39,6 +54,13 @@ def copy_raw_files_to_input_folder(n):
 def load_input(input_directory):
     """Funcion load_input"""
 
+    sequence = []
+    files = glob.glob(f"{input_directory}/*")
+    with fileinput.input(files=files) as f:
+        for line in f:
+            sequence.append((fileinput.filename(), line))
+    return sequence
+
 
 #
 # Escriba la función line_preprocessing que recibe una lista de tuplas de la
@@ -47,6 +69,12 @@ def load_input(input_directory):
 #
 def line_preprocessing(sequence):
     """Line Preprocessing"""
+    processed = []
+    for filename, line in sequence:
+        # Normalize text: lowercase and remove non-alphanumeric characters
+        clean_line = re.sub(r'[^\w\s]', '', line).lower()
+        processed.append((filename, clean_line))
+    return processed
 
 
 #
@@ -63,6 +91,12 @@ def line_preprocessing(sequence):
 #
 def mapper(sequence):
     """Mapper"""
+    mapped = []
+    for _, line in sequence:
+        words = line.split()
+        for word in words:
+            mapped.append((word, 1))
+    return mapped
 
 
 #
@@ -78,6 +112,9 @@ def mapper(sequence):
 #
 def shuffle_and_sort(sequence):
     """Shuffle and Sort"""
+    sequence.sort(key=lambda x: x[0])  # Sort by key (word)
+    grouped = [(key, list(group)) for key, group in groupby(sequence, key=lambda x: x[0])]
+    return grouped
 
 
 #
@@ -88,6 +125,11 @@ def shuffle_and_sort(sequence):
 #
 def reducer(sequence):
     """Reducer"""
+    reduced = []
+    for key, group in sequence:
+        count = sum(value for _, value in group)
+        reduced.append((key, count))
+    return reduced
 
 
 #
@@ -96,6 +138,9 @@ def reducer(sequence):
 #
 def create_ouptput_directory(output_directory):
     """Create Output Directory"""
+    if os.path.exists(output_directory):
+        shutil.rmtree(output_directory)
+    os.makedirs(output_directory)
 
 
 #
@@ -108,6 +153,9 @@ def create_ouptput_directory(output_directory):
 #
 def save_output(output_directory, sequence):
     """Save Output"""
+    with open(os.path.join(output_directory, "part-00000"), "w", encoding="utf-8") as f:
+        for key, value in sequence:
+            f.write(f"{key}\t{value}\n")
 
 
 #
@@ -116,6 +164,8 @@ def save_output(output_directory, sequence):
 #
 def create_marker(output_directory):
     """Create Marker"""
+    with open(os.path.join(output_directory, "_SUCCESS"), "w", encoding="utf-8") as f:
+        pass
 
 
 #
@@ -123,6 +173,14 @@ def create_marker(output_directory):
 #
 def run_job(input_directory, output_directory):
     """Job"""
+    create_ouptput_directory(output_directory)
+    input_data = load_input(input_directory)
+    preprocessed_data = line_preprocessing(input_data)
+    mapped_data = mapper(preprocessed_data)
+    shuffled_data = shuffle_and_sort(mapped_data)
+    reduced_data = reducer(shuffled_data)
+    save_output(output_directory, reduced_data)
+    create_marker(output_directory)
 
 
 if __name__ == "__main__":
